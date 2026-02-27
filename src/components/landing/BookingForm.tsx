@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageCircle } from "lucide-react";
 import { getLandingData, formatCurrency, generateWhatsAppUrl } from "@/lib/landing-data";
+import { toast } from "sonner";
 
 const BookingForm = () => {
   const data = getLandingData();
@@ -25,7 +26,11 @@ const BookingForm = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid) return;
+    
+    if (!isValid) {
+      toast.error("Mohon lengkapi semua data yang bertanda bintang (*)");
+      return;
+    }
 
     const url = generateWhatsAppUrl(data, {
       nama: nama.trim(),
@@ -135,7 +140,7 @@ const BookingForm = () => {
               </div>
             </div>
 
-            <Button type="submit" variant="wa" size="xl" className="w-full" disabled={!isValid}>
+            <Button type="submit" variant="wa" size="xl" className="w-full">
               <MessageCircle className="w-5 h-5" />
               Pesan via WhatsApp
             </Button>
