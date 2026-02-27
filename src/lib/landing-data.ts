@@ -23,7 +23,7 @@ export interface LandingData {
 
 const defaultData: LandingData = {
   pricePerHour: 50000,
-  whatsappNumber: "6281234567890",
+  whatsappNumber: "6285646420488",
   totalServed: 300,
   cities: [
     "Jakarta", "Bandung", "Surabaya", "Yogyakarta", "Semarang",
