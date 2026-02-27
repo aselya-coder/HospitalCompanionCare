@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X, HeartPulse } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-const links = [
+const defaultLinks = [
   { label: "Layanan", href: "#layanan" },
   { label: "Testimoni", href: "#testimoni" },
   { label: "FAQ", href: "#faq" },
@@ -10,6 +11,26 @@ const links = [
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
+  const [brand, setBrand] = useState("PendampingRS");
+  const [links, setLinks] = useState(defaultLinks);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const { data: nav } = await supabase.from("navbar").select("*").limit(1).maybeSingle();
+      if (mounted && nav?.brand_name) setBrand(nav.brand_name);
+      const { data: navLinks } = await supabase
+        .from("navbar_links")
+        .select("label, href, sort_order, active")
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+      if (mounted && navLinks?.length) setLinks(navLinks.map(({ label, href }) => ({ label, href })));
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const scrollToForm = () => {
     setOpen(false);
@@ -21,7 +42,7 @@ const Navbar = () => {
       <div className="container flex items-center justify-between h-16">
         <a href="#" className="flex items-center gap-2 text-primary font-bold text-lg">
           <HeartPulse className="w-6 h-6" />
-          <span>PendampingRS</span>
+          <span>{brand}</span>
         </a>
 
         {/* Desktop */}

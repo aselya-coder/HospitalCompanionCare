@@ -1,12 +1,29 @@
+import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { getLandingData } from "@/lib/landing-data";
+import { supabase } from "@/lib/supabase";
 
 const FloatingWhatsApp = () => {
-  const data = getLandingData();
+  const [phone, setPhone] = useState("6285646420488");
+  const [message, setMessage] = useState("Halo, saya ingin bertanya tentang jasa pendampingan rumah sakit.");
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const { data: wa } = await supabase.from("whatsapp_settings").select("*").limit(1).maybeSingle();
+      if (mounted && wa) {
+        if (wa.phone_number) setPhone(wa.phone_number);
+        if (wa.default_message) setMessage(wa.default_message);
+      }
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <a
-      href={`https://wa.me/${data.whatsappNumber}?text=${encodeURIComponent("Halo, saya ingin bertanya tentang jasa pendampingan rumah sakit.")}`}
+      href={`https://wa.me/${phone}?text=${encodeURIComponent(message)}`}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat via WhatsApp"

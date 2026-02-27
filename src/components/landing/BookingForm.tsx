@@ -1,15 +1,19 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageCircle } from "lucide-react";
-import { getLandingData, formatCurrency, generateWhatsAppUrl } from "@/lib/landing-data";
+import { formatCurrency } from "@/lib/landing-data";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 const BookingForm = () => {
-  const data = getLandingData();
+  const [services, setServices] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [pricePerHour, setPricePerHour] = useState<number>(50000);
+  const [waPhone, setWaPhone] = useState<string>("6285646420488");
 
   const [nama, setNama] = useState("");
   const [hp, setHp] = useState("");
@@ -21,16 +25,38 @@ const BookingForm = () => {
   const [pendamping, setPendamping] = useState("");
   const [catatan, setCatatan] = useState("");
 
-  const estimasiBiaya = useMemo(() => data.pricePerHour * estimasiJam, [estimasiJam, data.pricePerHour]);
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const { data: svc } = await supabase
+        .from("services")
+        .select("name, sort_order, active")
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+      if (mounted && svc) setServices(svc.map((s) => s.name));
+      const { data: cts } = await supabase.from("cities").select("name, sort_order, active").eq("active", true).order("sort_order", { ascending: true });
+      if (mounted && cts) setCities(cts.map((c) => c.name));
+      const { data: settings } = await supabase.from("site_settings").select("*").limit(1).maybeSingle();
+      if (mounted && settings?.price_per_hour) setPricePerHour(settings.price_per_hour);
+      const { data: wa } = await supabase.from("whatsapp_settings").select("*").limit(1).maybeSingle();
+      if (mounted && wa?.phone_number) setWaPhone(wa.phone_number);
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  const isValid = nama.trim() && hp.trim() && rumahSakit.trim() && kota && tanggal && pendamping;
+  const estimasiBiaya = useMemo(() => pricePerHour * estimasiJam, [estimasiJam, pricePerHour]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const isValid = Boolean(nama.trim() && hp.trim() && rumahSakit.trim() && kota && tanggal && pendamping);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     
     if (!nama.trim()) {
       toast.error("Nama Lengkap harus diisi");
-      return;
     }
     if (!hp.trim()) {
       toast.error("Nomor HP harus diisi");
@@ -57,17 +83,47 @@ const BookingForm = () => {
       return;
     }
 
-    const url = generateWhatsAppUrl(data, {
-      nama: nama.trim(),
-      hp: hp.trim(),
-      rumahSakit: rumahSakit.trim(),
-      layanan,
-      kota,
-      tanggal,
-      estimasiJam,
-      pendamping,
-      catatan: catatan.trim(),
-    });
+    const payload = {
+      name: nama.trim(),
+      phone: hp.trim(),
+      hospital: rumahSakit.trim(),
+      service: layanan,
+      city: kota,
+      date: tanggal,
+      hours: estimasiJam,
+      companion_gender: pendamping,
+      note: catatan.trim(),
+    };
+    let saved = false;
+    try {
+      const { error } = await supabase.from("bookings").insert(payload);
+      if (!error) {
+        saved = true;
+        toast.success("Pemesanan tercatat. Membuka WhatsApp…");
+      } else {
+        toast.warning("Gagal menyimpan ke sistem. Membuka WhatsApp…");
+      }
+    } catch (_) {
+      toast.warning("Gagal menyimpan ke sistem. Membuka WhatsApp…");
+    }
+
+    const message = `Halo Admin, saya ingin memesan jasa pendampingan RS.
+
+Nama: ${payload.name}
+No HP: ${payload.phone}
+Layanan: ${payload.service}
+Rumah Sakit: ${payload.hospital}
+Kota: ${payload.city}
+Tanggal: ${payload.date}
+Estimasi Jam: ${payload.hours} jam
+Pendamping: ${payload.companion_gender}
+Catatan: ${payload.note || "-"}
+
+Estimasi Biaya: ${formatCurrency(estimasiBiaya)}
+
+Mohon info ketersediaan dan total biaya.`;
+
+    const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
 
     window.open(url, "_blank");
   };
@@ -104,9 +160,9 @@ const BookingForm = () => {
                   <SelectValue placeholder="Pilih jenis layanan" />
                 </SelectTrigger>
                 <SelectContent>
-                  {data.services.map((service) => (
-                    <SelectItem key={service.name} value={service.name}>
-                      {service.name}
+                  {services.map((service) => (
+                    <SelectItem key={service} value={service}>
+                      {service}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -125,7 +181,7 @@ const BookingForm = () => {
                     <SelectValue placeholder="Pilih kota" />
                   </SelectTrigger>
                   <SelectContent>
-                    {data.cities.map((city) => (
+                    {cities.map((city) => (
                       <SelectItem key={city} value={city}>{city}</SelectItem>
                     ))}
                   </SelectContent>
@@ -174,7 +230,7 @@ const BookingForm = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Estimasi Biaya</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(data.pricePerHour)} × {estimasiJam} jam</p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(pricePerHour)} × {estimasiJam} jam</p>
                 </div>
                 <p className="text-2xl md:text-3xl font-extrabold text-primary">
                   {formatCurrency(estimasiBiaya)}

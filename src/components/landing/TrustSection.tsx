@@ -1,8 +1,34 @@
+import { useEffect, useState } from "react";
 import { Star, Users, ShieldCheck } from "lucide-react";
-import { getLandingData } from "@/lib/landing-data";
+import { supabase } from "@/lib/supabase";
 
 const TrustSection = () => {
-  const data = getLandingData();
+  const [totalServed, setTotalServed] = useState<number>(300);
+  const [heading, setHeading] = useState<string>("Lebih dari 300+ Keluarga Sudah Mempercayakan Kami");
+  const [testimonials, setTestimonials] = useState<{ name: string; text: string; rating: number; role: string }[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const { data: settings } = await supabase.from("site_settings").select("*").limit(1).maybeSingle();
+      if (mounted && settings?.total_served != null) {
+        setTotalServed(settings.total_served);
+        setHeading(`Lebih dari ${settings.total_served}+ Keluarga Sudah Mempercayakan Kami`);
+      }
+      const { data: trustCfg } = await supabase.from("trust_section_settings").select("*").limit(1).maybeSingle();
+      if (mounted && trustCfg?.heading) setHeading(trustCfg.heading.replace("{total}", String(settings?.total_served ?? 300)));
+      const { data: testi } = await supabase
+        .from("testimonials")
+        .select("name, text, rating, role, sort_order, active")
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+      if (mounted && testi) setTestimonials(testi);
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <section className="py-16 md:py-24" id="testimoni">
@@ -11,7 +37,7 @@ const TrustSection = () => {
         <div className="grid grid-cols-3 gap-4 mb-14">
           <div className="text-center p-6 rounded-2xl trust-bg">
             <Users className="w-8 h-8 text-accent mx-auto mb-2" />
-            <p className="text-3xl md:text-4xl font-extrabold text-foreground">{data.totalServed}+</p>
+            <p className="text-3xl md:text-4xl font-extrabold text-foreground">{totalServed}+</p>
             <p className="text-sm text-muted-foreground">Keluarga Terlayani</p>
           </div>
           <div className="text-center p-6 rounded-2xl trust-bg">
@@ -28,13 +54,13 @@ const TrustSection = () => {
 
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-4xl font-bold text-foreground mb-4">
-            Lebih dari {data.totalServed}+ Keluarga Sudah Mempercayakan Kami
+            {heading}
           </h2>
         </div>
 
         {/* Testimonials */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {data.testimonials.map((t, i) => (
+          {testimonials.map((t, i) => (
             <div key={i} className="bg-card rounded-2xl p-6 border border-border shadow-sm">
               <div className="flex gap-1 mb-4">
                 {Array.from({ length: t.rating }).map((_, j) => (
