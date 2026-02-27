@@ -27,8 +27,28 @@ const BookingForm = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isValid) {
-      toast.error("Mohon lengkapi semua data yang bertanda bintang (*)");
+    if (!nama.trim()) {
+      toast.error("Nama Lengkap harus diisi");
+      return;
+    }
+    if (!hp.trim()) {
+      toast.error("Nomor HP harus diisi");
+      return;
+    }
+    if (!rumahSakit.trim()) {
+      toast.error("Nama Rumah Sakit harus diisi");
+      return;
+    }
+    if (!kota) {
+      toast.error("Kota/Kabupaten harus dipilih");
+      return;
+    }
+    if (!tanggal) {
+      toast.error("Tanggal harus diisi");
+      return;
+    }
+    if (!pendamping) {
+      toast.error("Pilih jenis kelamin pendamping");
       return;
     }
 
