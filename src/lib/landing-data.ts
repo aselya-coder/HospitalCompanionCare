@@ -79,6 +79,7 @@ export function generateWhatsAppUrl(data: LandingData, form: {
   nama: string;
   hp: string;
   rumahSakit: string;
+  layanan: string;
   kota: string;
   tanggal: string;
   estimasiJam: number;
@@ -90,6 +91,7 @@ export function generateWhatsAppUrl(data: LandingData, form: {
 
 Nama: ${form.nama}
 No HP: ${form.hp}
+Layanan: ${form.layanan}
 Rumah Sakit: ${form.rumahSakit}
 Kota: ${form.kota}
 Tanggal: ${form.tanggal}

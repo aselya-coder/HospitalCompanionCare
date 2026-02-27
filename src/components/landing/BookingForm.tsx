@@ -14,6 +14,7 @@ const BookingForm = () => {
   const [nama, setNama] = useState("");
   const [hp, setHp] = useState("");
   const [rumahSakit, setRumahSakit] = useState("");
+  const [layanan, setLayanan] = useState("");
   const [kota, setKota] = useState("");
   const [tanggal, setTanggal] = useState("");
   const [estimasiJam, setEstimasiJam] = useState(1);
@@ -39,6 +40,10 @@ const BookingForm = () => {
       toast.error("Nama Rumah Sakit harus diisi");
       return;
     }
+    if (!layanan) {
+      toast.error("Jenis Layanan harus dipilih");
+      return;
+    }
     if (!kota) {
       toast.error("Kota/Kabupaten harus dipilih");
       return;
@@ -56,6 +61,7 @@ const BookingForm = () => {
       nama: nama.trim(),
       hp: hp.trim(),
       rumahSakit: rumahSakit.trim(),
+      layanan,
       kota,
       tanggal,
       estimasiJam,
@@ -89,6 +95,22 @@ const BookingForm = () => {
                 <Label htmlFor="hp">Nomor HP *</Label>
                 <Input id="hp" placeholder="08xxxxxxxxxx" value={hp} onChange={(e) => setHp(e.target.value)} required maxLength={15} />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="layanan">Pilih Layanan *</Label>
+              <Select value={layanan} onValueChange={setLayanan}>
+                <SelectTrigger id="layanan">
+                  <SelectValue placeholder="Pilih jenis layanan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {data.services.map((service) => (
+                    <SelectItem key={service.name} value={service.name}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-5">
