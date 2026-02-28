@@ -31,6 +31,10 @@ const DEFAULT_FAQS = [
   { q: "Apakah bisa memilih pendamping pria atau wanita?", a: "Tentu! Saat mengisi form pemesanan, Anda bisa memilih pendamping laki-laki atau perempuan sesuai kebutuhan dan kenyamanan Anda." },
 ];
 
+// Flag untuk mendeteksi apakah ini adalah reload halaman pertama kali
+// Variabel di luar komponen tidak akan reset saat navigasi internal, hanya saat reload browser
+let isInitialReload = true;
+
 const Admin = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<LandingData>(getLandingData());
@@ -169,6 +173,25 @@ const Admin = () => {
     setData((prev) => ({ ...prev, [key]: value }));
   };
 
+  const signIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      toast.error("Login gagal");
+    } else {
+      setSignedIn(true);
+      setUserEmail(email);
+      toast.success("Login berhasil");
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSignedIn(false);
+    setUserEmail("");
+    toast.success("Logout berhasil");
+  };
+
   const autoSeeded = useRef(false);
   const seedFromWebsite = async () => {
     const defaults = getLandingData();
@@ -256,16 +279,60 @@ const Admin = () => {
     toast.success("Konten berhasil diisi sesuai website");
   };
 
+  // Tambahkan Inactivity Timer (2 jam)
+  useEffect(() => {
+    if (!signedIn) return;
+
+    let timeoutId: NodeJS.Timeout;
+    const INACTIVITY_LIMIT = 2 * 60 * 60 * 1000; // 2 Jam
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        signOut();
+        toast.info("Sesi berakhir karena tidak ada aktivitas");
+      }, INACTIVITY_LIMIT);
+    };
+
+    // Dengarkan aktivitas user
+    window.addEventListener("mousemove", resetTimer);
+    window.addEventListener("keydown", resetTimer);
+    window.addEventListener("click", resetTimer);
+    window.addEventListener("scroll", resetTimer);
+
+    resetTimer();
+
+    return () => {
+      window.removeEventListener("mousemove", resetTimer);
+      window.removeEventListener("keydown", resetTimer);
+      window.removeEventListener("click", resetTimer);
+      window.removeEventListener("scroll", resetTimer);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [signedIn]);
+
   useEffect(() => {
     let mounted = true;
     const init = async () => {
-      // Kita panggil signOut agar sesi benar-benar bersih setiap kali reload
-      // sesuai permintaan: "ketika di close atau di reload seharus nya kembali ke halaman login"
-      await supabase.auth.signOut();
-      if (mounted) {
-        setSessionReady(true);
-        setSignedIn(false);
-        setUserEmail("");
+      // Jika ini adalah reload halaman (F5 atau buka tab baru)
+      if (isInitialReload) {
+        await supabase.auth.signOut();
+        isInitialReload = false;
+        if (mounted) {
+          setSessionReady(true);
+          setSignedIn(false);
+          setUserEmail("");
+        }
+      } else {
+        // Jika navigasi internal (dari Landing ke Admin tanpa reload)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          if (session) {
+            setSignedIn(true);
+            setUserEmail(session.user.email ?? "");
+          }
+          setSessionReady(true);
+        }
       }
     };
     init();
@@ -386,43 +453,26 @@ const Admin = () => {
     };
   }, [signedIn]);
 
-  const signIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      toast.error("Login gagal");
-    } else {
-      setSignedIn(true);
-      setUserEmail(email);
-      toast.success("Login berhasil");
-    }
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setSignedIn(false);
-    setUserEmail("");
-    toast.success("Logout berhasil");
-  };
-
   if (!sessionReady) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Memuat...</div>;
   }
 
   if (!signedIn) {
     return (
-      <div className=" uplift min-h-screen flex items-center justify-center bg-background">
-        <div className="bg-card rounded-2xl p-6 border border-border w-[360px] space-y-4">
+      <div className="uplift min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="bg-card rounded-2xl p-6 border border-border w-full max-w-[360px] space-y-4 shadow-sm">
           <h1 className="text-foreground font-bold text-lg text-center">Admin Login</h1>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Password</Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-          <Button onClick={signIn} className="w-full">Masuk</Button>
+          <form onSubmit={signIn} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@example.com" />
+            </div>
+            <div className="space-y-2">
+              <Label>Password</Label>
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+            <Button type="submit" className="w-full">Masuk</Button>
+          </form>
         </div>
       </div>
     );
@@ -514,41 +564,57 @@ const Admin = () => {
       </Sidebar>
       <SidebarInset>
         <div className="sticky top-0 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
-          <div className="container flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
+          <div className="container px-4 flex items-center justify-between h-16 gap-4">
+            <div className="flex items-center gap-2 min-w-0">
               <SidebarTrigger />
-              <button onClick={() => navigate("/")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <button 
+                onClick={() => navigate("/")} 
+                className="hidden sm:flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm whitespace-nowrap"
+              >
                 <ArrowLeft className="w-4 h-4" /> Kembali
               </button>
+              <h1 className="font-bold text-foreground capitalize truncate ml-1">{active}</h1>
             </div>
-            <h1 className="font-bold text-foreground capitalize">{active}</h1>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">{userEmail}</span>
-              <Button variant="outline" size="sm" onClick={signOut}>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="hidden lg:flex flex-col items-end mr-2">
+                <span className="text-[10px] text-muted-foreground leading-none mb-0.5">Logged in as</span>
+                <span className="text-xs font-medium text-foreground leading-none">{userEmail}</span>
+              </div>
+              
+              <Button variant="outline" size="icon" className="sm:hidden" onClick={signOut}>
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="hidden sm:flex" onClick={signOut}>
                 Logout
               </Button>
-              <Button variant="outline" size="sm" onClick={() => seedFromWebsite()}>
-                <RefreshCw className="w-4 h-4" /> Isi dari Website
+
+              <Button variant="outline" size="icon" onClick={() => seedFromWebsite()} title="Isi dari Website">
+                <RefreshCw className="w-4 h-4" />
               </Button>
-              <Button onClick={save} size="sm">
+              
+              <Button onClick={save} size="sm" className="hidden sm:flex">
                 <Save className="w-4 h-4" /> Simpan
+              </Button>
+              <Button onClick={save} size="icon" className="sm:hidden">
+                <Save className="w-4 h-4" />
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="container py-8 max-w-3xl space-y-8">
+        <div className="container px-4 py-6 sm:py-8 max-w-3xl space-y-8">
           {active === "dashboard" && (
-            <section className="grid grid-cols-3 gap-4">
-              <div className="text-center p-6 rounded-2xl border border-border bg-card">
+            <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="text-center p-6 rounded-2xl border border-border bg-card shadow-sm">
                 <p className="text-3xl font-extrabold text-foreground">{bookings.length}</p>
                 <p className="text-sm text-muted-foreground">Bookings</p>
               </div>
-              <div className="text-center p-6 rounded-2xl border border-border bg-card">
+              <div className="text-center p-6 rounded-2xl border border-border bg-card shadow-sm">
                 <p className="text-3xl font-extrabold text-foreground">{data.services.length}</p>
                 <p className="text-sm text-muted-foreground">Services</p>
               </div>
-              <div className="text-center p-6 rounded-2xl border border-border bg-card">
+              <div className="text-center p-6 rounded-2xl border border-border bg-card shadow-sm">
                 <p className="text-3xl font-extrabold text-foreground">{faqs.length}</p>
                 <p className="text-sm text-muted-foreground">FAQ</p>
               </div>
@@ -569,14 +635,14 @@ const Admin = () => {
                 </Button>
               </div>
               {navbarLinks.map((l, i) => (
-                <div key={i} className="grid sm:grid-cols-3 gap-2">
+                <div key={i} className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_auto] gap-2 p-3 border border-border/50 rounded-xl sm:p-0 sm:border-0">
                   <Input placeholder="Label" value={l.label} onChange={(e) => {
                     const arr = [...navbarLinks]; arr[i] = { ...arr[i], label: e.target.value }; setNavbarLinks(arr);
                   }} />
                   <Input placeholder="Href" value={l.href} onChange={(e) => {
                     const arr = [...navbarLinks]; arr[i] = { ...arr[i], href: e.target.value }; setNavbarLinks(arr);
                   }} />
-                  <Button size="icon" variant="ghost" onClick={() => setNavbarLinks(navbarLinks.filter((_, j) => j !== i))}>
+                  <Button size="icon" variant="ghost" className="self-end sm:self-auto" onClick={() => setNavbarLinks(navbarLinks.filter((_, j) => j !== i))}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 </div>
@@ -606,9 +672,9 @@ const Admin = () => {
                 <Button size="sm" variant="outline" onClick={() => setProblems([...problems, ""])}><Plus className="w-4 h-4" /> Tambah</Button>
               </div>
               {problems.map((p, i) => (
-                <div key={i} className="flex gap-2">
+                <div key={i} className="flex gap-2 items-center">
                   <Input value={p} onChange={(e) => { const arr = [...problems]; arr[i] = e.target.value; setProblems(arr); }} />
-                  <Button size="icon" variant="ghost" onClick={() => setProblems(problems.filter((_, j) => j !== i))}>
+                  <Button size="icon" variant="ghost" className="shrink-0" onClick={() => setProblems(problems.filter((_, j) => j !== i))}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 </div>
@@ -708,14 +774,14 @@ const Admin = () => {
                 </Button>
               </div>
               {trustPoints.map((p, i) => (
-                <div key={i} className="grid sm:grid-cols-3 gap-2">
+                <div key={i} className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_auto] gap-2 p-3 border border-border/50 rounded-xl sm:p-0 sm:border-0">
                   <Input placeholder="Teks" value={p.text} onChange={(e) => {
                     const arr = [...trustPoints]; arr[i] = { ...arr[i], text: e.target.value }; setTrustPoints(arr);
                   }} />
                   <Input placeholder="Icon (Clock/Shield/Zap/MapPin)" value={p.icon} onChange={(e) => {
                     const arr = [...trustPoints]; arr[i] = { ...arr[i], icon: e.target.value }; setTrustPoints(arr);
                   }} />
-                  <Button size="icon" variant="ghost" onClick={() => setTrustPoints(trustPoints.filter((_, j) => j !== i))}>
+                  <Button size="icon" variant="ghost" className="self-end sm:self-auto" onClick={() => setTrustPoints(trustPoints.filter((_, j) => j !== i))}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 </div>
@@ -774,16 +840,18 @@ const Admin = () => {
                 <Input value={faqHeading} onChange={(e) => setFaqHeading(e.target.value)} />
               </div>
               {faqs.map((f, i) => (
-                <div key={i} className="border border-border rounded-xl p-4 space-y-3">
-                  <Input placeholder="Pertanyaan" value={f.q} onChange={(e) => {
-                    const arr = [...faqs]; arr[i] = { ...arr[i], q: e.target.value }; setFaqs(arr);
-                  }} />
-                  <Textarea placeholder="Jawaban" rows={2} value={f.a} onChange={(e) => {
-                    const arr = [...faqs]; arr[i] = { ...arr[i], a: e.target.value }; setFaqs(arr);
-                  }} />
-                  <div className="text-right">
-                    <Button size="icon" variant="ghost" onClick={() => setFaqs(faqs.filter((_, j) => j !== i))}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
+                <div key={i} className="border border-border rounded-xl p-4 space-y-3 relative group">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1 space-y-3">
+                      <Input placeholder="Pertanyaan" value={f.q} onChange={(e) => {
+                        const arr = [...faqs]; arr[i] = { ...arr[i], q: e.target.value }; setFaqs(arr);
+                      }} />
+                      <Textarea placeholder="Jawaban" rows={2} value={f.a} onChange={(e) => {
+                        const arr = [...faqs]; arr[i] = { ...arr[i], a: e.target.value }; setFaqs(arr);
+                      }} />
+                    </div>
+                    <Button size="icon" variant="ghost" className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setFaqs(faqs.filter((_, j) => j !== i))}>
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -826,23 +894,34 @@ const Admin = () => {
           {active === "bookings" && (
             <section className="bg-card rounded-2xl p-6 border border-border space-y-4">
               <h2 className="font-bold text-lg text-foreground">Bookings (View Only)</h2>
-              <div className="space-y-2">
-                {bookings.slice(0, 20).map((b) => (
-                  <div key={b.id} className="border border-border rounded-xl p-4">
-                    <div className="flex items-center justify-between">
+              <div className="space-y-4">
+                {bookings.slice(0, 50).map((b) => (
+                  <div key={b.id} className="border border-border rounded-xl p-4 space-y-2 hover:bg-muted/50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <p className="font-semibold text-foreground text-sm">{b.name} • {b.phone}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleString()}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">{new Date(b.created_at).toLocaleString()}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">{b.hospital} • {b.city} • {b.date} • {b.hours} jam • {b.service} • {b.companion_gender}</p>
-                    {b.note ? <p className="text-sm">{b.note}</p> : null}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <p><span className="font-medium text-foreground/70">RS:</span> {b.hospital}</p>
+                      <p><span className="font-medium text-foreground/70">Kota:</span> {b.city}</p>
+                      <p><span className="font-medium text-foreground/70">Tanggal:</span> {b.date}</p>
+                      <p><span className="font-medium text-foreground/70">Durasi:</span> {b.hours} jam</p>
+                      <p><span className="font-medium text-foreground/70">Layanan:</span> {b.service}</p>
+                      <p><span className="font-medium text-foreground/70">Gender:</span> {b.companion_gender}</p>
+                    </div>
+                    {b.note && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <p className="text-xs italic">"{b.note}"</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </section>
           )}
 
-          <div className="text-center pb-8">
-            <Button onClick={save} size="lg">
+          <div className="flex flex-col sm:flex-row justify-center gap-4 pb-8">
+            <Button onClick={save} size="lg" className="w-full sm:w-auto">
               <Save className="w-4 h-4" /> Simpan Semua Perubahan
             </Button>
           </div>
