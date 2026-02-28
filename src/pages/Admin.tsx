@@ -259,14 +259,25 @@ const Admin = () => {
   useEffect(() => {
     let mounted = true;
     const init = async () => {
-      const { data: s } = await supabase.auth.getSession();
+      // Kita panggil signOut agar sesi benar-benar bersih setiap kali reload
+      // sesuai permintaan: "ketika di close atau di reload seharus nya kembali ke halaman login"
+      await supabase.auth.signOut();
       if (mounted) {
-        setSignedIn(Boolean(s.session));
         setSessionReady(true);
-        setUserEmail(s.session?.user?.email ?? "");
+        setSignedIn(false);
+        setUserEmail("");
       }
     };
     init();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    
+    let mounted = true;
     const load = async () => {
       const { data: settings } = await supabase.from("site_settings").select("*").limit(1).maybeSingle();
       const { data: wa } = await supabase.from("whatsapp_settings").select("*").limit(1).maybeSingle();
@@ -334,7 +345,7 @@ const Admin = () => {
         };
       });
       setBrand(nb?.brand_name ?? "PendampingRS");
-      setNavbarLinks(nbl && nbl.length ? nbl.map((l) => ({ label: l.label, href: l.href })) : navbarLinks);
+      if (nbl && nbl.length) setNavbarLinks(nbl.map((l) => ({ label: l.label, href: l.href })));
       setHeroTitle(hero?.title ?? heroTitle);
       setHeroHighlight(hero?.highlight ?? heroHighlight);
       setHeroDescription(hero?.description ?? heroDescription);
@@ -342,9 +353,9 @@ const Admin = () => {
       setHeroUrgencyText(hero?.urgency_text ?? heroUrgencyText);
       setProblemHeading(prSet?.heading ?? problemHeading);
       setProblemBottomText(prSet?.bottom_text ?? problemBottomText);
-      setProblems(prList && prList.length ? prList.map((p) => p.text) : problems);
+      if (prList && prList.length) setProblems(prList.map((p) => p.text));
       setFaqHeading(faqSet?.heading ?? faqHeading);
-      setFaqs(faqList && faqList.length ? faqList.map((f) => ({ q: f.question, a: f.answer })) : faqs);
+      if (faqList && faqList.length) setFaqs(faqList.map((f) => ({ q: f.question, a: f.answer })));
       setCtaHeading(cta?.heading ?? ctaHeading);
       setCtaSubheading(cta?.subheading ?? ctaSubheading);
       setCtaButtonText(cta?.button_text ?? ctaButtonText);
@@ -355,7 +366,7 @@ const Admin = () => {
       setServicesTitle(svcSet?.title ?? servicesTitle);
       setServicesSubtitle(svcSet?.subtitle ?? servicesSubtitle);
       setTrustHeading(trustSet?.heading ?? trustHeading);
-      setTrustPoints(tp?.map((x) => ({ text: x.text, icon: x.icon || "Clock" })) ?? trustPoints);
+      if (tp && tp.length) setTrustPoints(tp.map((x) => ({ text: x.text, icon: x.icon || "Clock" })));
       const shouldSeed =
         (!cts || cts.length === 0) &&
         (!svc || svc.length === 0) &&
@@ -373,7 +384,7 @@ const Admin = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [signedIn]);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
