@@ -482,7 +482,7 @@ const Admin = () => {
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="border-b border-sidebar-border">
-          <div className="p-2 text-sm font-semibold">Admin Panel</div>
+          <div className="p-2 text-sm font-semibold">Admin HospitalCompanionCare</div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
